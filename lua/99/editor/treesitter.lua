@@ -35,6 +35,23 @@ local function tree_root(buffer, lang)
     return tree:root()
 end
 
+--- Get tree root and query in one call
+--- @param buffer number
+--- @param lang string
+--- @param query_name string
+--- @return any?, any? -- root, query (both nil on failure)
+local function get_query(buffer, lang, query_name)
+    local root = tree_root(buffer, lang)
+    if not root then
+        return nil, nil
+    end
+    local ok, query = pcall(vim.treesitter.query.get, lang, query_name)
+    if not ok or query == nil then
+        return nil, nil
+    end
+    return root, query
+end
+
 --- @param context _99.RequestContext
 --- @param cursor _99.Point
 --- @return _99.treesitter.TSNode | nil
@@ -42,30 +59,14 @@ function M.fn_call(context, cursor)
     local buffer = context.buffer
     local lang = context.file_type
     local logger = context.logger:set_area("treesitter")
-    local root = tree_root(buffer, lang)
+    local root, query = get_query(buffer, lang, fn_call_query)
     if not root then
-        Logger:error(
-            "unable to find treeroot, this should never happen",
+        logger:error(
+            "unable to find tree root or fn_call_query",
             "buffer",
             buffer,
             "lang",
             lang
-        )
-        return nil
-    end
-
-    local ok, query = pcall(vim.treesitter.query.get, lang, fn_call_query)
-    if not ok or query == nil then
-        logger:error(
-            "unable to get the fn_call_query",
-            "lang",
-            lang,
-            "buffer",
-            buffer,
-            "ok",
-            type(ok),
-            "query",
-            type(query)
         )
         return nil
     end
@@ -151,23 +152,9 @@ function M.containing_function(context, cursor)
     local logger = context and context.logger:set_area("treesitter") or Logger
 
     logger:error("loading lang", "buffer", buffer, "lang", lang)
-    local root = tree_root(buffer, lang)
+    local root, query = get_query(buffer, lang, function_query)
     if not root then
-        logger:debug("LSP: could not find tree root")
-        return nil
-    end
-
-    local ok, query = pcall(vim.treesitter.query.get, lang, function_query)
-    if not ok or query == nil then
-        logger:debug(
-            "LSP: not ok or query",
-            "query",
-            vim.inspect(query),
-            "lang",
-            lang,
-            "ok",
-            vim.inspect(ok)
-        )
+        logger:debug("LSP: could not find tree root or query")
         return nil
     end
 
@@ -203,14 +190,6 @@ function M.containing_function(context, cursor)
         "INVARIANT: found_range is not nil but found node is"
     )
 
-    ok, query = pcall(vim.treesitter.query.get, lang, function_query)
-    if not ok or query == nil then
-        logger:fatal("INVARIANT: found_range ", "range", found_range:to_text())
-        return
-    end
-
-    --- TODO: we need some language specific things here.
-    --- that is because comments above the function needs to considered
     return Function.from_ts_node(found_node, cursor, context)
 end
 
@@ -219,24 +198,9 @@ end
 function M.imports(buffer)
     Logger:assert(false, "not implemented yet", "id", 69420)
     local lang = vim.bo[buffer].ft
-    local root = tree_root(buffer, lang)
+    local root, query = get_query(buffer, lang, imports_query)
     if not root then
-        Logger:debug("imports: could not find tree root")
-        return {}
-    end
-
-    local ok, query = pcall(vim.treesitter.query.get, lang, imports_query)
-
-    if not ok or query == nil then
-        Logger:debug(
-            "imports: not ok or query",
-            "query",
-            vim.inspect(query),
-            "lang",
-            lang,
-            "ok",
-            vim.inspect(ok)
-        )
+        Logger:debug("imports: could not find tree root or query")
         return {}
     end
 
@@ -262,13 +226,8 @@ end
 function M.get_preceding_comments(context, func_range)
     local buffer = context.buffer
     local lang = context.file_type
-    local root = tree_root(buffer, lang)
+    local root, query = get_query(buffer, lang, comments_query)
     if not root then
-        return {}
-    end
-
-    local ok, query = pcall(vim.treesitter.query.get, lang, comments_query)
-    if not ok or query == nil then
         return {}
     end
 
@@ -305,13 +264,8 @@ end
 function M.get_enclosing_context(context, cursor)
     local buffer = context.buffer
     local lang = context.file_type
-    local root = tree_root(buffer, lang)
+    local root, query = get_query(buffer, lang, context_query)
     if not root then
-        return nil
-    end
-
-    local ok, query = pcall(vim.treesitter.query.get, lang, context_query)
-    if not ok or query == nil then
         return nil
     end
 
@@ -345,13 +299,8 @@ end
 --- @return table[]
 function M.get_go_interfaces(context)
     local buffer = context.buffer
-    local root = tree_root(buffer, "go")
+    local root, query = get_query(buffer, "go", context_query)
     if not root then
-        return {}
-    end
-
-    local ok, query = pcall(vim.treesitter.query.get, "go", context_query)
-    if not ok or query == nil then
         return {}
     end
 
@@ -387,13 +336,8 @@ end
 --- @param func_name string
 --- @return string[]
 local function search_prototypes_in_buffer(buffer, func_name)
-    local root = tree_root(buffer, "c")
+    local root, query = get_query(buffer, "c", context_query)
     if not root then
-        return {}
-    end
-
-    local ok, query = pcall(vim.treesitter.query.get, "c", context_query)
-    if not ok or query == nil then
         return {}
     end
 
@@ -463,13 +407,8 @@ end
 --- @return string[]
 function M.get_c_local_includes(context)
     local buffer = context.buffer
-    local root = tree_root(buffer, "c")
+    local root, query = get_query(buffer, "c", includes_query)
     if not root then
-        return {}
-    end
-
-    local ok, query = pcall(vim.treesitter.query.get, "c", includes_query)
-    if not ok or query == nil then
         return {}
     end
 

@@ -141,4 +141,27 @@ function M.assert_section_not_exists(query, section)
     )
 end
 
+--- @param content string[]
+--- @param lang string
+--- @param row number
+--- @param col number
+--- @return _99.test.Provider, number
+function M.setup_test(content, lang, row, col)
+    local p = M.TestProvider.new()
+    require("99").setup({
+        provider = p,
+        logger = {
+            error_cache_level = require("99.logger.level").ERROR,
+            type = "print",
+        },
+    })
+    return p, M.create_file(content, lang, row, col)
+end
+
+--- @param buffer number
+--- @return string[]
+function M.lines(buffer)
+    return vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
+end
+
 return M
